@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <title>香港生存模擬器 </title>
+    <style>
+        body { background: #000; color: #bbb; font-family: "PingFang HK", "Microsoft JhengHei", sans-serif; display: flex; justify-content: center; padding-top: 50px; margin: 0; }
+        #game-box { width: 90%; max-width: 550px; border: 1px solid #333; padding: 20px; box-shadow: 0 0 20px rgba(255,255,255,0.05); }
+        h2 { color: #fff; font-size: 1.2em; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        #status-panel { background: #111; padding: 12px; margin-bottom: 20px; font-size: 0.9em; line-height: 1.6; border-left: 3px solid #555; }
+        #log { height: 350px; overflow-y: auto; margin-bottom: 20px; border: 1px solid #222; padding: 10px; font-size: 0.9em; background: #050505; color: #888; line-height: 1.6; }
+        .major-btn { background: #222; border: 1px solid #444; color: #ccc; padding: 15px; margin: 5px 0; width: 100%; text-align: left; cursor: pointer; }
+        .major-btn:hover { background: #333; color: #fff; border-color: #777; }
+        .action-btn { background: none; border: 1px solid #555; color: #aaa; padding: 12px; width: 48%; margin: 1%; cursor: pointer; font-size: 0.9em; transition: 0.2s; vertical-align: top; height: 45px;}
+        .action-btn:hover { border-color: #fff; color: #fff; background: #111; }
+        .lunch-btn { border-color: #ffd700; color: #ffd700; }
+        .hidden { display: none; }
+        .highlight { color: #ffd700; font-weight: bold; }
+        .danger { color: #ff4d4d; font-weight: bold; }
+        .event-msg { color: #f39c12; font-weight: bold; font-style: italic; border-left: 3px solid #f39c12; padding-left: 8px; margin: 8px 0; background: rgba(243, 156, 18, 0.1); }
+        .info-blue { color: #00d4ff; font-weight: bold; }
+        .holiday { color: #52be80; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div id="game-box">
+    <h2>香港生存模擬器</h2>
+
+    <div id="status-panel">
+        <div id="time-display">時間：第 1 天 (週一) | 09:00</div>
+        <div id="major-display">身份：待定</div>
+        <div id="shift-display" class="info-blue">狀態：準備入職</div>
+        <div style="margin-top: 5px; border-top: 1px solid #222; padding-top: 5px;">
+            存款：$<span id="money" class="highlight">3000</span> | 
+            理智：<span id="san">100</span> | 
+            體力：<span id="energy">100</span>
+        </div>
+    </div>
+
+    <div id="log">
+        <div>> 歡迎成為社畜。</div>
+        <div>> 啱啱畢業嘅你戶口得返 $3000。你要點樣係呢個香港生存呢。</div>
+               <div>> 請選擇你大學讀嘅學科。</div>
+    </div>
+
+    <div id="major-selection">
+        <button class="major-btn" onclick="initGame('商科')"><b>商科 (Business)</b><br><small>起薪 $22,000 | 每日都係 Synergy 與 Excel 中掙扎</small></button>
+        <button class="major-btn" onclick="initGame('護理科')"><b>護理科 (Nursing)</b><br><small>起薪 $35,000 | 體力消耗極快，輪班人生</small></button>
+        <button class="major-btn" onclick="initGame('文科')"><b>文科 (Arts)</b><br><small>起薪 $15,000 | 打不死的小強</small></button>
+        <button class="major-btn" onclick="initGame('理科')"><b>理科 (Science)</b><br><small>起薪 $19,000 | 係實驗同 Debug 中消耗生命</small></button>
+    </div>
+
+    <div id="action-area" class="hidden">
+        <button id="btn-1" class="action-btn" onclick="doAction('main')">[ 努力工作 ]</button>
+        <button id="btn-2" class="action-btn" onclick="doAction('sub')">[ 蛇王 ]</button>
+        <button id="btn-lunch" class="action-btn lunch-btn hidden" onclick="doAction('lunch')">[ 快速午餐 ] (-$60)</button>
+        <button id="btn-eat" class="action-btn" onclick="doAction('eat')">[ 收工食飯 ] (-$180)</button>
+        <button id="btn-sleep" class="action-btn" onclick="doAction('sleep')">[ 返屋企訓教 ]</button>
+    </div>
+
+    <div id="restart-area" class="hidden" style="margin-top: 20px;">
+        <button class="major-btn" onclick="restartGame()" style="text-align: center; border-color: #fff; color: #fff;">
+            [ 重新開始新嘅社畜 ]
+        </button>
+    </div>
+</div>
+
+<script>
+    const weekDays = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"];
+    let state = {
+        day: 1, hour: 9, money: 3000, san: 100, energy: 100,
+        major: "", salary: 0, isGameOver: false,
+        currentShift: { name: "常規班", start: 9, end: 18 }
+    };
+
+    function initGame(majorName) {
+        state.major = majorName;
+        const salaries = { "商科": 22000, "護理科": 35000, "文科": 15000, "理科": 19000 };
+        state.salary = salaries[majorName];
+        document.getElementById('major-display').innerText = "身份：" + majorName + " 畢業生";
+        document.getElementById('major-selection').classList.add('hidden');
+        document.getElementById('action-area').classList.remove('hidden');
+        updateShift();
+        updateUI();
+    }
+
+    function updateShift() {
+        let dayOfWeek = weekDays[state.day % 7];
+        let isWeekend = (dayOfWeek === "週六" || dayOfWeek === "週日");
+        if (state.major === "護理科") {
+            const shifts = [
+                { name: "早班 (A-Shift)", start: 7, end: 15 },
+                { name: "午班 (P-Shift)", start: 14, end: 21 },
+                { name: "夜班 (N-Shift)", start: 21, end: 7 },
+                { name: "休假 (Off Day)", start: -1, end: -1 }
+            ];
+            state.currentShift = shifts[Math.floor(Math.random() * shifts.length)];
+        } else {
+            if (isWeekend) state.currentShift = { name: "放假 (Holiday)", start: -1, end: -1 };
+            else state.currentShift = { name: "常規班", start: 9, end: 18 };
+        }
+        addLog(state.currentShift.start === -1 ? `<span class='holiday'>[更表] 今日 ${dayOfWeek}，放假！</span>` : `<span class='system-msg'>[更表] 今日 ${dayOfWeek}，更次：${state.currentShift.name}</span>`);
+    }
+
+    function doAction(type) {
+        if(state.isGameOver) return;
+        let isHoliday = (state.currentShift.start === -1);
+        
+        if (type === 'main') {
+            if (isHoliday) { addLog("係屋企瘋狂打機，望住啲隊友全部似傻仔。"); state.san += 15; state.energy -= 10; }
+            else { handleWorkLogic(); }
+        } 
+        else if (type === 'sub') {
+            if (isHoliday) { addLog("同frd出去食飯，攰到傻但又少少滿足。"); state.money -= 120; state.san += 25; state.energy -= 15; }
+            else { addLog("係公司廁所玩手機，呢個係你每日最平靜的時間。"); state.san += 5; state.energy -= 2; }
+        }
+        else if (type === 'lunch') { addLog("是但係公司樓下食個頹飯。"); state.money -= 60; state.energy += 15; }
+        else if (type === 'eat') {
+            if (!isHoliday && !canLeaveWork()) { addLog("<span class='system-msg'>仲未收工啊。</span>"); return; }
+            addLog("收工去食餐好。"); state.money -= 180; state.san += 20; state.energy += 15;
+        }
+        else if (type === 'sleep') {
+            if (!isHoliday && !canLeaveWork()) { addLog("<span class='system-msg'>老細都未收工 你收咩工。</span>"); return; }
+            let nextS = (state.currentShift.start === -1) ? 9 : state.currentShift.start;
+            let tp = (nextS > state.hour) ? (nextS - state.hour) : (24 - state.hour + nextS);
+            addLog("返到屋企攰到sir 即刻訓死 聽日繼續。"); state.energy += 40; state.san += 15;
+            passTime(tp); triggerRandomEvent('sleep'); updateUI(); return;
+        }
+
+        passTime(1);
+        // 提升到 40% 觸發率
+        if (Math.random() < 0.4) triggerRandomEvent(isHoliday ? 'holiday' : 'work'); 
+        updateUI();
+    }
+
+    function canLeaveWork() {
+        let h = state.hour; let end = state.currentShift.end;
+        if (state.currentShift.name === "夜班 (N-Shift)") return (h >= 7 && h < 21);
+        return (h >= end || h < 6);
+    }
+
+    function handleWorkLogic() {
+        let msg = "";
+        if(state.major === '商科') {
+            const msgs = ["Excel 突然死機，仲要冇save到。", "老細開會係咁重複 Synergy，你聽到想嘔。", "在中環地鐵站比人夾到扁曬，理智下降。"];
+            msg = msgs[Math.floor(Math.random() * msgs.length)];
+            state.san -= 15; state.energy -= 10;
+        } else if(state.major === '護理科') {
+            msg = state.currentShift.name.includes("A") ? "個個都搵你 廁所都唔得閒去。" : "Call 機狂響，你覺得自己係一部Call機。";
+            state.san -= 10; state.energy -= 25;
+        } else {
+            msg = "機械式工作，感覺人生毫無意思。";
+            state.san -= 10; state.energy -= 12;
+        }
+        addLog(msg);
+    }
+
+    function triggerRandomEvent(context) {
+        const events = {
+            work: [
+                { m: "【突發】老闆突然叫你入房，只係想問下你點樣連WiFi。", s: -5, e: 0, money: 0 },
+                { m: "【幸運】同事突然請你飲嘢！", s: 15, e: 5, money: 0 },
+                { m: "【悲報】強積金結單寄黎，你發現蝕咗半年人工。", s: -20, e: 0, money: 0 },
+                { m: "【日常】好耐冇聯絡嘅同學問你借錢，你心諗：JM9。", s: -10, e: 0, money: 0 },
+                { m: "【驚喜】透過寵物cam見到屋企隻貓係到望住你 心情好返少少。", s: 5, e: 0, money: 0 },
+                { m: "【惡耗】連登見到有人開 Po 鬧你間公司，你好驚被起底。", s: -15, e: -5, money: 0 }
+            ],
+            holiday: [
+                { m: "【突發】阿媽叫你幫手執屋，又冇咗半日假期。", s: -15, e: -20, money: 0 },
+                { m: "【幸運】在舊褲袋執到 $50 蚊！", s: 10, e: 0, money: 50 },
+                { m: "【崩潰】旺角人多到窒息，你以後假日都不想出門。", s: -15, e: -10, money: 0 },
+                { m: "【日常】收到以前唔熟嘅同學派「紅炸彈」，你要準備俾人情。", s: -10, e: 0, money: -500 },
+                { m: "【放鬆】今日天氣好，去海濱長廊行咗陣，心情舒暢。", s: 20, e: 10, money: 0 }
+            ],
+            sleep: [
+                { m: "【夢境】夢到自己中咗六合彩，原來真係夢。", s: -5, e: 0, money: 0 },
+                { m: "【不幸】半夜樓上拖凳，完全訓唔返。", s: -5, e: -20, money: 0 },
+                { m: "【驚喜】今日竟然冇蚊喺耳邊飛，瞓得好好。", s: 5, e: 15, money: 0 }
+            ]
+        };
+
+        let pool = events[context] || events.work;
+        let evt = pool[Math.floor(Math.random() * pool.length)];
+        state.san += evt.s; state.energy += evt.e; state.money += evt.money;
+        addLog(`<div class='event-msg'>${evt.m} (理智${evt.s >= 0 ? '+' : ''}${evt.s}, 體力${evt.e >= 0 ? '+' : ''}${evt.e}${evt.money !== 0 ? ', 錢' + (evt.money > 0 ? '+' : '') + evt.money : ''})</div>`);
+    }
+
+    function passTime(h) {
+        let oldDay = state.day; state.hour += h;
+        while (state.hour >= 24) { state.day += 1; state.hour -= 24; }
+        if (state.day > oldDay) {
+            addLog("--- 第 " + state.day + " 天 ---");
+            updateShift();
+            if (state.day % 30 === 0) {
+                state.money += state.salary;
+                addLog("<b class='highlight'>【發糧日】戶口存入 $" + state.salary + "！</b>");
+            }
+        }
+    }
+
+    function updateUI() {
+        document.getElementById('money').innerText = state.money;
+        document.getElementById('san').innerText = Math.max(0, state.san);
+        document.getElementById('energy').innerText = Math.max(0, state.energy);
+        let isHoliday = (state.currentShift.start === -1);
+        let h = state.hour;
+        document.getElementById('btn-1').innerText = isHoliday ? "[ 瘋狂打機 ] (-1h)" : "[ 工作 ] (-1h)";
+        document.getElementById('btn-2').innerText = isHoliday ? "[ 朋友聚會 ] (-$120)" : "[ 放空 ] (-1h)";
+        if (!isHoliday && h >= 12 && h < 14) document.getElementById('btn-lunch').classList.remove('hidden');
+        else document.getElementById('btn-lunch').classList.add('hidden');
+        document.getElementById('time-display').innerText = `時間：第 ${state.day} 天 (${weekDays[state.day % 7]}) | ${(h < 10 ? '0' + h : h)}:00`;
+        document.getElementById('shift-display').innerText = "狀態：" + state.currentShift.name + (isHoliday ? "" : ` (${state.currentShift.start}:00-${state.currentShift.end}:00)`);
+        if(state.san <= 0 || state.energy <= 0) { state.isGameOver = true; handleDeath(); }
+    }
+
+    function handleDeath() {
+        let deathMsg = state.energy <= 0 ? "攰到仆，直接係公司門口長眠。" : "理智歸零，屌完老細之後直接人間蒸發。";
+        addLog("<span class='danger'>【終局】" + deathMsg + "</span>");
+        document.getElementById('action-area').classList.add('hidden');
+        document.getElementById('restart-area').classList.remove('hidden');
+    }
+
+    function addLog(msg) {
+        const log = document.getElementById('log');
+        log.innerHTML += "<div>> " + msg + "</div>";
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function restartGame() { location.reload(); }
+</script>
+
+</body>
+</html>
